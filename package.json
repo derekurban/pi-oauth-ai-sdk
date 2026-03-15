@@ -1,0 +1,65 @@
+{
+  "name": "pi-oauth-ai-sdk",
+  "version": "0.1.0",
+  "description": "AI SDK language model adapters for Pi AI OAuth providers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "pi-oauth-ai-sdk": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "ci": "npm run typecheck && npm test && npm run build",
+    "build": "tsup",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run ci"
+  },
+  "keywords": [
+    "ai",
+    "ai-sdk",
+    "oauth",
+    "anthropic",
+    "openai",
+    "copilot",
+    "gemini"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/derekurban2001/pi-oauth-ai-sdk.git"
+  },
+  "homepage": "https://github.com/derekurban2001/pi-oauth-ai-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/derekurban2001/pi-oauth-ai-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "^3.0.8",
+    "@mariozechner/pi-ai": "^0.58.3",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "ai": "^6.0.116",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
