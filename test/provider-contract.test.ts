@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateObject, generateText, stepCountIs, streamObject, streamText, tool } from "ai";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import type { LanguageModelV2, LanguageModelV2StreamPart, LanguageModelV3 } from "@ai-sdk/provider";
 import { z } from "zod";
 
 import {
@@ -23,7 +23,10 @@ type ProviderCase = {
   providerId: "openai-codex" | "anthropic" | "google-gemini-cli";
   modelId: string;
   credentials: OAuthCredentialRecord;
-  create: (options: OAuthProviderOptions) => { languageModel(modelId: string): LanguageModelV3 };
+  create: (options: OAuthProviderOptions) => {
+    languageModel(modelId: string): LanguageModelV3;
+    languageModelV2(modelId: string): LanguageModelV2;
+  };
   textResponse: (text: string) => Response;
   toolCallResponse: (toolName: string, input: Record<string, unknown>) => Response;
   assertBasicRequest: (request: CapturedRequest) => void;
@@ -298,6 +301,46 @@ function captureFetch(responses: Response[], calls: CapturedRequest[]) {
   });
 }
 
+async function readV2Stream(stream: ReadableStream<LanguageModelV2StreamPart>) {
+  const reader = stream.getReader();
+  let text = "";
+  let sawStreamStart = false;
+  let finishReason: string | undefined;
+  let warnings: Array<{ type: string }> = [];
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      if (!value) {
+        continue;
+      }
+
+      switch (value.type) {
+        case "stream-start":
+          sawStreamStart = true;
+          warnings = value.warnings as Array<{ type: string }>;
+          break;
+        case "text-delta":
+          text += value.delta;
+          break;
+        case "finish":
+          finishReason = value.finishReason;
+          break;
+        default:
+          break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return { text, sawStreamStart, finishReason, warnings };
+}
+
 describe.each(providerCases)("$name", (providerCase) => {
   const cleanups: Array<() => void> = [];
 
@@ -329,6 +372,21 @@ describe.each(providerCases)("$name", (providerCase) => {
     providerCase.assertBasicRequest(calls[0]!);
   });
 
+  it("supports languageModelV2 doGenerate", async () => {
+    const { provider, calls } = createProvider([providerCase.textResponse("pong-v2")]);
+
+    const result = await provider.languageModelV2(providerCase.modelId).doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Reply with exactly pong-v2" }] }],
+    });
+
+    expect(result.content).toEqual([{ type: "text", text: "pong-v2" }]);
+    expect(result.finishReason).toBe("stop");
+    expect(result.response?.modelId).toBe(providerCase.modelId);
+    expect(result.warnings).toEqual([]);
+    expect(calls).toHaveLength(1);
+    providerCase.assertBasicRequest(calls[0]!);
+  });
+
   it("supports streamText", async () => {
     const { provider } = createProvider([providerCase.textResponse("stream-pong")]);
 
@@ -339,6 +397,48 @@ describe.each(providerCases)("$name", (providerCase) => {
 
     const text = await readTextStream(result.textStream);
     expect(text).toBe("stream-pong");
+  });
+
+  it("supports languageModelV2 doStream with compatibility warnings", async () => {
+    const { provider, calls } = createProvider([providerCase.textResponse("{\"status\":\"ok\",\"code\":9}")]);
+
+    const result = await provider.languageModelV2(providerCase.modelId).doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Return a JSON object." }] }],
+      responseFormat: { type: "json", schema: { type: "object" } },
+      ...(providerCase.providerId === "openai-codex" ? { temperature: 0.7 } : {}),
+      ...(providerCase.providerId === "google-gemini-cli"
+        ? {
+          tools: [{
+            type: "function" as const,
+            name: "weather",
+            description: "Returns weather.",
+            inputSchema: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
+          }],
+          toolChoice: { type: "required" as const },
+        }
+        : {}),
+    });
+
+    const streamed = await readV2Stream(result.stream);
+
+    expect(streamed.sawStreamStart).toBe(true);
+    expect(streamed.text).toBe("{\"status\":\"ok\",\"code\":9}");
+    expect(streamed.finishReason).toBe("stop");
+    expect(streamed.warnings.some((warning) => warning.type === "other")).toBe(true);
+
+    if (providerCase.providerId === "openai-codex") {
+      expect(streamed.warnings).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "unsupported-setting", setting: "temperature" }),
+      ]));
+    }
+
+    if (providerCase.providerId === "google-gemini-cli") {
+      expect(streamed.warnings).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "unsupported-setting", setting: "toolChoice" }),
+      ]));
+    }
+
+    providerCase.assertJsonRequest(calls[0]!);
   });
 
   it("supports generateObject via compatibility JSON mode", async () => {

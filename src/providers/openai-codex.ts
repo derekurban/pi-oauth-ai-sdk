@@ -54,14 +54,6 @@ export const openAICodexTransport: ProviderTransport = {
 };
 
 function buildRequestBody(options: TransportCallOptions): CodexRequestBody {
-  if (options.prepared.settings.temperature !== undefined) {
-    options.warnings.push({
-      type: "unsupported",
-      feature: "temperature",
-      details: "OpenAI Codex OAuth currently ignores temperature and always uses the backend default.",
-    });
-  }
-
   const body: CodexRequestBody = {
     model: options.modelId,
     store: false,

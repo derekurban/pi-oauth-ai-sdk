@@ -1,4 +1,4 @@
-import type { LanguageModelV3, ProviderV3 } from "@ai-sdk/provider";
+import type { LanguageModelV2, LanguageModelV3, ProviderV3 } from "@ai-sdk/provider";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@mariozechner/pi-ai/oauth";
 
 export const OAUTH_PROVIDER_IDS = [
@@ -46,6 +46,7 @@ export interface OAuthManagedProvider extends ProviderV3 {
   readonly providerId: OAuthProviderId;
   readonly authFile: OAuthAuthFile;
   readonly auth: OAuthManager;
+  languageModelV2(modelId: string): LanguageModelV2;
   languageModel(modelId: string): LanguageModelV3;
 }
 

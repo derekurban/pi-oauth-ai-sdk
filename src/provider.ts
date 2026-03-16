@@ -3,7 +3,7 @@ import type { OAuthLoginCallbacks } from "@mariozechner/pi-ai/oauth";
 
 import { resolveDefaultCodexAuthFile } from "./auth/openai-codex-login.js";
 import { OAuthAuthStore } from "./auth/store.js";
-import { createLanguageModel } from "./core/execution.js";
+import { createLanguageModel, createLanguageModelV2 } from "./core/execution.js";
 import type {
   CodexOAuthManager,
   CodexOAuthProvider,
@@ -34,6 +34,14 @@ function createProvider(providerId: OAuthProviderId, options: OAuthProviderOptio
     providerId,
     authFile: options.authFile,
     auth,
+    languageModelV2(modelId: string) {
+      return createLanguageModelV2({
+        providerId,
+        modelId,
+        authStore,
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+      });
+    },
     languageModel(modelId: string) {
       return createLanguageModel({
         providerId,

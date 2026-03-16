@@ -94,10 +94,10 @@ export interface RuntimeCallSettings {
   headers?: Record<string, string>;
 }
 
-export interface PreparedRuntimeCall {
+export interface PreparedRuntimeCall<TWarning = SharedV3Warning> {
   context: RuntimeContext;
   settings: RuntimeCallSettings;
-  warnings: SharedV3Warning[];
+  warnings: TWarning[];
 }
 
 export interface RuntimeAssistantMessage {

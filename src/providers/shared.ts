@@ -1,5 +1,3 @@
-import type { SharedV3Warning } from "@ai-sdk/provider";
-
 import type { OAuthCredentialRecord, OAuthProviderId } from "../types.js";
 import type {
   PreparedRuntimeCall,
@@ -12,10 +10,9 @@ import type {
 export interface TransportCallOptions {
   providerId: OAuthProviderId;
   modelId: string;
-  prepared: PreparedRuntimeCall;
+  prepared: PreparedRuntimeCall<unknown>;
   credentials: OAuthCredentialRecord;
   fetch: typeof globalThis.fetch;
-  warnings: SharedV3Warning[];
 }
 
 export interface ProviderTransport {

@@ -1,4 +1,7 @@
 import type {
+  LanguageModelV2,
+  LanguageModelV2CallOptions,
+  LanguageModelV2CallWarning,
   LanguageModelV3,
   LanguageModelV3CallOptions,
   SharedV3Warning,
@@ -6,15 +9,15 @@ import type {
 import { LoadAPIKeyError } from "@ai-sdk/provider";
 
 import { OAuthAuthStore } from "../auth/store.js";
-import type { OAuthProviderId } from "../types.js";
-import { prepareRuntimeCall } from "./prompt.js";
-import { toGenerateResult } from "./result.js";
-import { toLanguageModelV3Stream } from "./stream.js";
 import { anthropicTransport } from "../providers/anthropic.js";
 import { geminiCliTransport } from "../providers/google-gemini-cli.js";
 import { openAICodexTransport } from "../providers/openai-codex.js";
-import type { PreparedRuntimeCall, RuntimeAssistantMessage } from "./runtime-types.js";
 import type { ProviderTransport } from "../providers/shared.js";
+import type { OAuthProviderId } from "../types.js";
+import { prepareRuntimeCall, prepareRuntimeCallV2 } from "./prompt.js";
+import { toGenerateResult, toGenerateResultV2 } from "./result.js";
+import { toLanguageModelV2Stream, toLanguageModelV3Stream } from "./stream.js";
+import type { PreparedRuntimeCall, RuntimeAssistantMessage, RuntimeStreamEvent } from "./runtime-types.js";
 
 type CreateLanguageModelOptions = {
   providerId: OAuthProviderId;
@@ -24,7 +27,7 @@ type CreateLanguageModelOptions = {
 };
 
 const transportByProviderId: Record<OAuthProviderId, ProviderTransport> = {
-  "anthropic": anthropicTransport,
+  anthropic: anthropicTransport,
   "google-gemini-cli": geminiCliTransport,
   "openai-codex": openAICodexTransport,
 };
@@ -37,11 +40,13 @@ export function createLanguageModel(options: CreateLanguageModelOptions): Langua
     supportedUrls: {},
     async doGenerate(callOptions: LanguageModelV3CallOptions) {
       const prepared = prepareRuntimeCall(callOptions);
+      applyProviderWarningsV3(options.providerId, prepared);
       const { message, warnings } = await executeGenerate(options, prepared);
       return toGenerateResult(message, warnings);
     },
     async doStream(callOptions: LanguageModelV3CallOptions) {
       const prepared = prepareRuntimeCall(callOptions);
+      applyProviderWarningsV3(options.providerId, prepared);
       const { source, warnings } = await executeStream(options, prepared);
 
       return {
@@ -51,10 +56,34 @@ export function createLanguageModel(options: CreateLanguageModelOptions): Langua
   };
 }
 
-async function executeGenerate(
+export function createLanguageModelV2(options: CreateLanguageModelOptions): LanguageModelV2 {
+  return {
+    specificationVersion: "v2",
+    provider: `ai-sdk-oauth-providers/${options.providerId}`,
+    modelId: options.modelId,
+    supportedUrls: {},
+    async doGenerate(callOptions: LanguageModelV2CallOptions) {
+      const prepared = prepareRuntimeCallV2(callOptions);
+      applyProviderWarningsV2(options.providerId, prepared);
+      const { message, warnings } = await executeGenerate(options, prepared);
+      return toGenerateResultV2(message, warnings);
+    },
+    async doStream(callOptions: LanguageModelV2CallOptions) {
+      const prepared = prepareRuntimeCallV2(callOptions);
+      applyProviderWarningsV2(options.providerId, prepared);
+      const { source, warnings } = await executeStream(options, prepared);
+
+      return {
+        stream: toLanguageModelV2Stream(source, warnings),
+      };
+    },
+  };
+}
+
+async function executeGenerate<TWarning>(
   options: CreateLanguageModelOptions,
-  prepared: PreparedRuntimeCall,
-): Promise<{ message: RuntimeAssistantMessage; warnings: SharedV3Warning[] }> {
+  prepared: PreparedRuntimeCall<TWarning>,
+): Promise<{ message: RuntimeAssistantMessage; warnings: TWarning[] }> {
   const { source, warnings } = await executeStream(options, prepared);
   let finalMessage: RuntimeAssistantMessage | undefined;
 
@@ -76,10 +105,10 @@ async function executeGenerate(
   return { message: finalMessage, warnings };
 }
 
-async function executeStream(
+async function executeStream<TWarning>(
   options: CreateLanguageModelOptions,
-  prepared: PreparedRuntimeCall,
-): Promise<{ source: AsyncIterable<import("./runtime-types.js").RuntimeStreamEvent>; warnings: SharedV3Warning[] }> {
+  prepared: PreparedRuntimeCall<TWarning>,
+): Promise<{ source: AsyncIterable<RuntimeStreamEvent>; warnings: TWarning[] }> {
   const warnings = [...prepared.warnings];
   const transport = transportByProviderId[options.providerId];
   const credentials = await loadCredentials(options.authStore, options.providerId);
@@ -91,10 +120,59 @@ async function executeStream(
     prepared,
     credentials,
     fetch: fetchImpl,
-    warnings,
   });
 
   return { source, warnings };
+}
+
+function applyProviderWarningsV2(
+  providerId: OAuthProviderId,
+  prepared: PreparedRuntimeCall<LanguageModelV2CallWarning>,
+): void {
+  if (providerId === "openai-codex" && prepared.settings.temperature !== undefined) {
+    prepared.warnings.push({
+      type: "unsupported-setting",
+      setting: "temperature",
+      details: "OpenAI Codex OAuth currently ignores temperature and always uses the backend default.",
+    });
+  }
+
+  if (
+    providerId === "google-gemini-cli"
+    && prepared.context.tools?.length
+    && (prepared.context.toolChoice?.type === "required" || prepared.context.toolChoice?.type === "tool")
+  ) {
+    prepared.warnings.push({
+      type: "unsupported-setting",
+      setting: "toolChoice",
+      details: "Gemini CLI OAuth only supports auto, none, or any tool selection. Falling back to ANY.",
+    });
+  }
+}
+
+function applyProviderWarningsV3(
+  providerId: OAuthProviderId,
+  prepared: PreparedRuntimeCall<SharedV3Warning>,
+): void {
+  if (providerId === "openai-codex" && prepared.settings.temperature !== undefined) {
+    prepared.warnings.push({
+      type: "unsupported",
+      feature: "temperature",
+      details: "OpenAI Codex OAuth currently ignores temperature and always uses the backend default.",
+    });
+  }
+
+  if (
+    providerId === "google-gemini-cli"
+    && prepared.context.tools?.length
+    && (prepared.context.toolChoice?.type === "required" || prepared.context.toolChoice?.type === "tool")
+  ) {
+    prepared.warnings.push({
+      type: "unsupported",
+      feature: "toolChoice",
+      details: "Gemini CLI OAuth only supports auto, none, or any tool selection. Falling back to ANY.",
+    });
+  }
 }
 
 async function loadCredentials(authStore: OAuthAuthStore, providerId: OAuthProviderId) {

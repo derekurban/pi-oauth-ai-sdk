@@ -1,5 +1,3 @@
-import type { SharedV3Warning } from "@ai-sdk/provider";
-
 import type { ProviderTransport, TransportCallOptions } from "./shared.js";
 import {
   createEmptyAssistantMessage,
@@ -114,7 +112,7 @@ function buildRequestBody(options: TransportCallOptions, projectId: string): Gem
     }];
     requestBody.request.toolConfig = {
       functionCallingConfig: {
-        mode: mapToolChoice(options.prepared.context.toolChoice, options.warnings),
+        mode: mapToolChoice(options.prepared.context.toolChoice),
       },
     };
   }
@@ -135,7 +133,6 @@ function buildGeminiHeaders(options: TransportCallOptions): Headers {
 
 function mapToolChoice(
   toolChoice: TransportCallOptions["prepared"]["context"]["toolChoice"],
-  warnings: SharedV3Warning[],
 ): "AUTO" | "NONE" | "ANY" {
   if (!toolChoice || toolChoice.type === "auto") {
     return "AUTO";
@@ -144,11 +141,6 @@ function mapToolChoice(
     return "NONE";
   }
   if (toolChoice.type === "required" || toolChoice.type === "tool") {
-    warnings.push({
-      type: "unsupported",
-      feature: "toolChoice",
-      details: "Gemini CLI OAuth only supports auto, none, or any tool selection. Falling back to ANY.",
-    });
     return "ANY";
   }
   return "AUTO";

@@ -1,4 +1,10 @@
 import type {
+  LanguageModelV2,
+  LanguageModelV2CallWarning,
+  LanguageModelV2Content,
+  LanguageModelV2FinishReason,
+  LanguageModelV2ResponseMetadata,
+  LanguageModelV2Usage,
   LanguageModelV3FinishReason,
   LanguageModelV3GenerateResult,
   LanguageModelV3ResponseMetadata,
@@ -13,7 +19,7 @@ export function toGenerateResult(
   warnings: SharedV3Warning[],
 ): LanguageModelV3GenerateResult {
   return {
-    content: toContent(message),
+    content: toContentV3(message),
     finishReason: toFinishReason(message.stopReason),
     usage: toUsage(message),
     response: {
@@ -23,7 +29,24 @@ export function toGenerateResult(
   };
 }
 
-export function toResponseMetadata(message: RuntimeAssistantMessage): LanguageModelV3ResponseMetadata {
+export function toGenerateResultV2(
+  message: RuntimeAssistantMessage,
+  warnings: LanguageModelV2CallWarning[],
+): Awaited<ReturnType<LanguageModelV2["doGenerate"]>> {
+  return {
+    content: toContentV2(message),
+    finishReason: toFinishReasonV2(message.stopReason),
+    usage: toUsageV2(message),
+    response: {
+      ...toResponseMetadata(message),
+    },
+    warnings,
+  };
+}
+
+export function toResponseMetadata(
+  message: RuntimeAssistantMessage,
+): LanguageModelV2ResponseMetadata & LanguageModelV3ResponseMetadata {
   return {
     ...(message.responseId ? { id: message.responseId } : {}),
     timestamp: new Date(message.timestamp),
@@ -36,6 +59,24 @@ export function toFinishReason(reason: RuntimeAssistantMessage["stopReason"]): L
     unified: toUnifiedFinishReason(reason),
     raw: reason,
   };
+}
+
+export function toFinishReasonV2(reason: RuntimeAssistantMessage["stopReason"]): LanguageModelV2FinishReason {
+  switch (reason) {
+    case "stop":
+      return "stop";
+    case "length":
+      return "length";
+    case "toolUse":
+      return "tool-calls";
+    case "error":
+    case "aborted":
+      return "error";
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
 }
 
 export function toUsage(message: RuntimeAssistantMessage): LanguageModelV3Usage {
@@ -54,6 +95,16 @@ export function toUsage(message: RuntimeAssistantMessage): LanguageModelV3Usage 
     raw: {
       totalTokens: message.usage.totalTokens,
     },
+  };
+}
+
+export function toUsageV2(message: RuntimeAssistantMessage): LanguageModelV2Usage {
+  return {
+    inputTokens: message.usage.input,
+    outputTokens: message.usage.output,
+    totalTokens: message.usage.totalTokens,
+    reasoningTokens: undefined,
+    cachedInputTokens: message.usage.cacheRead,
   };
 }
 
@@ -77,7 +128,35 @@ function toUnifiedFinishReason(
   }
 }
 
-function toContent(message: RuntimeAssistantMessage): LanguageModelV3GenerateResult["content"] {
+function toContentV2(message: RuntimeAssistantMessage): LanguageModelV2Content[] {
+  return message.content.map((part) => {
+    switch (part.type) {
+      case "text":
+        return {
+          type: "text",
+          text: part.text,
+        };
+      case "thinking":
+        return {
+          type: "reasoning",
+          text: part.thinking,
+        };
+      case "toolCall":
+        return {
+          type: "tool-call",
+          toolCallId: part.id,
+          toolName: part.name,
+          input: JSON.stringify(part.arguments ?? {}),
+        };
+      default: {
+        const exhaustive: never = part;
+        return exhaustive;
+      }
+    }
+  });
+}
+
+function toContentV3(message: RuntimeAssistantMessage): LanguageModelV3GenerateResult["content"] {
   return message.content.map((part) => {
     switch (part.type) {
       case "text":

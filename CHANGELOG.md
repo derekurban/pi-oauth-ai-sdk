@@ -3,6 +3,13 @@
 All notable changes to `ai-sdk-oauth-providers` will be documented in this
 file.
 
+## 0.2.1 - 2026-03-16
+
+### Added
+
+- Added `languageModelV2(modelId)` as a thin compatibility export on each
+  OAuth-backed provider instance.
+
 ## 0.2.0 - 2026-03-16
 
 ### Added

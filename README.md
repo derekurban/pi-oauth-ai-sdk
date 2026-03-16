@@ -10,6 +10,9 @@ This package targets Node 20+, AI SDK v6, and latest Mastra. It uses
 `@mariozechner/pi-ai/oauth` for login and refresh only, then talks to each
 provider with package-owned transports.
 
+It also exposes a thin `languageModelV2(modelId)` compatibility surface for
+older consumers that still need the AI SDK V2 language-model contract.
+
 `pi-oauth-ai-sdk` is being retired in favor of this package. New integration
 work should target `ai-sdk-oauth-providers`.
 
@@ -109,6 +112,27 @@ const result = await generateText({
 });
 
 console.log(result.text);
+```
+
+### Legacy V2 compatibility
+
+If you still need the older `LanguageModelV2` contract, use the thin
+compatibility export on the same provider instance:
+
+```ts
+import { createAnthropicOAuth } from "ai-sdk-oauth-providers";
+
+const anthropic = createAnthropicOAuth({
+  authFile: "./.auth/oauth.json",
+});
+
+const model = anthropic.languageModelV2("claude-sonnet-4-5");
+
+const result = await model.doGenerate({
+  prompt: [{ role: "user", content: [{ type: "text", text: "Reply with exactly pong" }] }],
+});
+
+console.log(result.content);
 ```
 
 ### Provider registry composition

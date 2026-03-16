@@ -1,6 +1,6 @@
 {
   "name": "ai-sdk-oauth-providers",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "OAuth-backed AI SDK V3 providers for Codex, Anthropic, and Gemini CLI",
   "type": "module",
   "main": "./dist/index.js",
