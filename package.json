@@ -1,6 +1,6 @@
 {
   "name": "pi-oauth-ai-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "AI SDK language model adapters for Pi AI OAuth providers",
   "type": "module",
   "main": "./dist/index.js",

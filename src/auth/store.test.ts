@@ -13,12 +13,17 @@ const oauthMocks = vi.hoisted(() => ({
   getOAuthProvider: vi.fn(),
   getOAuthProviders: vi.fn(),
   getOAuthApiKey: vi.fn(),
+  loginOpenAICodexWithOfficialFlow: vi.fn(),
 }));
 
 vi.mock("@mariozechner/pi-ai/oauth", () => ({
   getOAuthProvider: oauthMocks.getOAuthProvider,
   getOAuthProviders: oauthMocks.getOAuthProviders,
   getOAuthApiKey: oauthMocks.getOAuthApiKey,
+}));
+
+vi.mock("./openai-codex-login.js", () => ({
+  loginOpenAICodexWithOfficialFlow: oauthMocks.loginOpenAICodexWithOfficialFlow,
 }));
 
 import { PiOAuthAuthStore } from "./store.js";
@@ -37,6 +42,7 @@ describe("PiOAuthAuthStore", () => {
     oauthMocks.getOAuthProvider.mockReset();
     oauthMocks.getOAuthProviders.mockReset();
     oauthMocks.getOAuthApiKey.mockReset();
+    oauthMocks.loginOpenAICodexWithOfficialFlow.mockReset();
 
     oauthMocks.getOAuthProvider.mockReturnValue(oauthMocks.provider);
     oauthMocks.getOAuthProviders.mockReturnValue([]);
@@ -130,5 +136,24 @@ describe("PiOAuthAuthStore", () => {
     const store = new PiOAuthAuthStore(authFile);
 
     await expect(store.getStatus("anthropic")).rejects.toThrow(/Failed to parse auth file/);
+  });
+
+  it("uses the package-local OpenAI Codex login flow", async () => {
+    oauthMocks.loginOpenAICodexWithOfficialFlow.mockResolvedValue({
+      access: "codex-access",
+      refresh: "codex-refresh",
+      expires: Date.now() + 60_000,
+      accountId: "acct_123",
+    });
+
+    const store = new PiOAuthAuthStore(authFile);
+    const record = await store.login("openai-codex", {
+      onAuth: vi.fn(),
+      onPrompt: vi.fn(),
+    });
+
+    expect(oauthMocks.loginOpenAICodexWithOfficialFlow).toHaveBeenCalledTimes(1);
+    expect(oauthMocks.provider.login).not.toHaveBeenCalled();
+    expect(record.accountId).toBe("acct_123");
   });
 });

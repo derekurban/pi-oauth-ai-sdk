@@ -11,6 +11,7 @@ import {
   type OAuthLoginCallbacks,
 } from "@mariozechner/pi-ai/oauth";
 
+import { loginOpenAICodexWithOfficialFlow } from "./openai-codex-login.js";
 import {
   type PiOAuthAuthFile,
   type PiOAuthCredentialRecord,
@@ -34,7 +35,9 @@ export class PiOAuthAuthStore {
       throw new Error(`Unknown OAuth provider: ${providerId}`);
     }
 
-    const credentials = await provider.login(callbacks);
+    const credentials = providerId === "openai-codex"
+      ? await loginOpenAICodexWithOfficialFlow(callbacks)
+      : await provider.login(callbacks);
     const record: PiOAuthCredentialRecord = { type: "oauth", ...credentials };
 
     await this.withLock(async (data) => ({
