@@ -1,10 +1,18 @@
 # pi-oauth-ai-sdk
 
-Lightweight AI SDK adapters for the OAuth-capable providers exposed by [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai).
+`pi-oauth-ai-sdk` exposes OAuth-backed Pi AI providers as AI SDK language models.
 
-This package is focused on one thing: reusing Pi AI's OAuth flows and token refresh logic, then exposing those providers as AI SDK language models.
+It is built for one job: reuse the OAuth flows and token refresh behavior from [`@mariozechner/pi-ai`](https://www.npmjs.com/package/@mariozechner/pi-ai), then surface those providers through a small API that fits the AI SDK provider model.
 
-## Supported providers
+## Features
+
+- Supports Pi AI OAuth providers without reimplementing their login flows
+- Persists credentials to a JSON auth file you control
+- Refreshes expired tokens automatically
+- Exposes AI SDK `LanguageModelV2` and `LanguageModelV3` adapters
+- Includes a CLI for `login`, `logout`, `status`, and provider discovery
+
+## Supported Providers
 
 - `anthropic`
 - `github-copilot`
@@ -12,28 +20,61 @@ This package is focused on one thing: reusing Pi AI's OAuth flows and token refr
 - `google-gemini-cli`
 - `google-antigravity`
 
-## Supported AI SDK interfaces
-
-- `LanguageModelV2`
-- `LanguageModelV3`
-
-## Install
+## Installation
 
 ```bash
 npm install pi-oauth-ai-sdk
 ```
 
-## Usage
+## Quick Start
+
+First, authenticate a provider and write credentials to an auth file:
+
+```bash
+npx pi-oauth-ai-sdk login --provider anthropic --auth-file ./.auth/pi-oauth.json
+```
+
+Then use that auth file from your application:
 
 ```ts
+import { generateText } from "ai";
 import { createAnthropicProvider } from "pi-oauth-ai-sdk";
 
 const provider = createAnthropicProvider({
   authFile: "./.auth/pi-oauth.json",
 });
 
-const model = provider.languageModelV3("claude-sonnet-4-5");
+const result = await generateText({
+  model: provider.languageModelV3("claude-sonnet-4-5"),
+  prompt: "Write a short release note for a new SDK package.",
+});
+
+console.log(result.text);
 ```
+
+## API
+
+The package exports one factory per supported provider:
+
+- `createAnthropicProvider`
+- `createGitHubCopilotProvider`
+- `createOpenAICodexProvider`
+- `createGeminiCliProvider`
+- `createAntigravityProvider`
+
+Each factory accepts:
+
+```ts
+{
+  authFile: string;
+  fetch?: typeof globalThis.fetch;
+}
+```
+
+Each provider instance exposes:
+
+- `languageModelV2(modelId: string)`
+- `languageModelV3(modelId: string)`
 
 ## CLI
 
@@ -44,17 +85,31 @@ pi-oauth-ai-sdk status --provider anthropic --auth-file ./.auth/pi-oauth.json
 pi-oauth-ai-sdk logout --provider anthropic --auth-file ./.auth/pi-oauth.json
 ```
 
-## Release
+`providers` prints the provider ids supported by the installed version of `@mariozechner/pi-ai`.
 
-CI runs on pushes and pull requests.
+## Auth Storage
 
-Publishing is handled by GitHub Actions on version tags:
+Credentials are stored in a JSON file keyed by provider id. The file is managed by the package and refreshed credentials are written back automatically after token renewal.
 
-- tag format: `v*`
-- example: `v0.1.0`
+Example:
 
-To enable npm publishing, add this repository secret in GitHub Actions:
+```json
+{
+  "anthropic": {
+    "type": "oauth",
+    "access": "...",
+    "refresh": "...",
+    "expires": 1760000000000
+  }
+}
+```
 
-- `NPM_TOKEN`: an npm automation token with publish rights for this package
+## Release Process
 
-The publish workflow also supports manual dispatch so an existing tag can be published after secrets are added.
+This repository includes GitHub Actions for:
+
+- CI on pushes to `main` and pull requests
+- npm publishing on version tags matching `v*`
+- manual publish reruns for an existing tag through `workflow_dispatch`
+
+To publish from GitHub Actions, add an `NPM_TOKEN` repository secret with permission to publish the package.
