@@ -6,6 +6,8 @@ import type { OAuthCredentials, OAuthLoginCallbacks } from "@mariozechner/pi-ai/
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 const TOKEN_URL = "https://auth.openai.com/oauth/token";
+const CALLBACK_PORT = 1455;
+const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}/auth/callback`;
 const SCOPE = "openid profile email offline_access api.connectors.read api.connectors.invoke";
 const ORIGINATOR = "codex_cli_rs";
 
@@ -29,7 +31,6 @@ type OAuthServerInfo = {
   close: () => void;
   cancelWait: () => void;
   waitForCode: () => Promise<{ code: string } | null>;
-  redirectUri: string;
 };
 
 type JwtPayload = {
@@ -206,17 +207,15 @@ async function startLocalOAuthServer(state: string): Promise<OAuthServerInfo> {
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
+    server.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EADDRINUSE") {
+        reject(new Error(`OpenAI Codex OAuth requires port ${CALLBACK_PORT} to be available on localhost.`));
+        return;
+      }
+      reject(error);
+    });
+    server.listen(CALLBACK_PORT, "127.0.0.1", () => resolve());
   });
-
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    server.close();
-    throw new Error("Failed to determine local OAuth callback port");
-  }
-
-  const redirectUri = `http://localhost:${address.port}/auth/callback`;
 
   return {
     close: () => server.close(),
@@ -232,7 +231,6 @@ async function startLocalOAuthServer(state: string): Promise<OAuthServerInfo> {
       }
       return null;
     },
-    redirectUri,
   };
 }
 
@@ -241,7 +239,7 @@ export async function loginOpenAICodexWithOfficialFlow(callbacks: OAuthLoginCall
   const state = createState();
   const server = await startLocalOAuthServer(state);
   const url = buildOpenAICodexAuthorizeUrl({
-    redirectUri: server.redirectUri,
+    redirectUri: REDIRECT_URI,
     challenge,
     state,
   });
@@ -318,7 +316,7 @@ export async function loginOpenAICodexWithOfficialFlow(callbacks: OAuthLoginCall
       throw new Error("Missing authorization code");
     }
 
-    const tokenResult = await exchangeAuthorizationCode(code, verifier, server.redirectUri);
+    const tokenResult = await exchangeAuthorizationCode(code, verifier, REDIRECT_URI);
     if (tokenResult.type !== "success") {
       throw new Error("Token exchange failed");
     }
