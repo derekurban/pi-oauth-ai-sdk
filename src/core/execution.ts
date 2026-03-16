@@ -116,15 +116,16 @@ async function resolveRuntimeRequest<TWarning>(
   const model = resolvePiModel(options.providerId, options.modelId, credentials);
   const choice = mapToolChoice(model.api, prepared.toolChoice, prepared.warnings, warningMode);
   const context = ensureProviderContext(model.api, prepared.context);
+  const streamOptions = sanitizeProviderStreamOptions(model.api, {
+    ...prepared.streamOptions,
+    ...choice,
+    apiKey,
+  });
 
   return {
     model,
     context,
-    streamOptions: {
-      ...prepared.streamOptions,
-      ...choice,
-      apiKey,
-    },
+    streamOptions,
     warnings: prepared.warnings,
   };
 }
@@ -141,6 +142,15 @@ function ensureProviderContext(
     ...context,
     systemPrompt: "You are a helpful assistant.",
   };
+}
+
+function sanitizeProviderStreamOptions(api: Api, streamOptions: Record<string, unknown>): Record<string, unknown> {
+  if (api !== "openai-codex-responses") {
+    return streamOptions;
+  }
+
+  const { temperature: _temperature, ...rest } = streamOptions;
+  return rest;
 }
 
 async function loadApiKey(authStore: PiOAuthAuthStore, providerId: PiOAuthProviderId) {

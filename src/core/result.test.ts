@@ -41,6 +41,11 @@ describe("result mapping", () => {
     const result = toV3GenerateResult(assistantMessage, []);
 
     expect(result.finishReason).toEqual({ unified: "tool-calls", raw: "toolUse" });
+    expect(result.content).toEqual([
+      { type: "text", text: "hello" },
+      { type: "reasoning", text: "reasoning" },
+      { type: "tool-call", toolCallId: "call-1", toolName: "weather", input: JSON.stringify({ city: "Calgary" }) },
+    ]);
     expect(result.usage.inputTokens).toEqual({
       total: 13,
       noCache: 10,

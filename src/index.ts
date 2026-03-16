@@ -7,6 +7,7 @@ export {
 } from "./provider.js";
 
 export { PiOAuthAuthStore } from "./auth/store.js";
+export { withMastraCompat } from "./mastra.js";
 
 export type {
   PiOAuthAuthFile,

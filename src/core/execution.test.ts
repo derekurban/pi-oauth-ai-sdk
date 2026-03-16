@@ -51,6 +51,7 @@ describe("execution", () => {
 
     await model.doGenerate({
       prompt: [{ role: "user", content: [{ type: "text", text: "ping" }] }],
+      temperature: 0.7,
     });
 
     expect(piAiMocks.complete).toHaveBeenCalledWith(
@@ -60,6 +61,13 @@ describe("execution", () => {
       }),
       expect.objectContaining({
         apiKey: "test-api-key",
+      }),
+    );
+    expect(piAiMocks.complete).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.not.objectContaining({
+        temperature: expect.anything(),
       }),
     );
   });

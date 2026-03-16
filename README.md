@@ -106,6 +106,73 @@ Each provider instance exposes:
 - `languageModelV2(modelId: string)`
 - `languageModelV3(modelId: string)`
 
+## Mastra Compatibility
+
+Latest Mastra currently has two agent-level issues that affect this package's AI SDK models:
+
+- `Agent.generate(..., { output })` drops `output` before it reaches Mastra's structured output path
+- per-call `clientTools` lose their executor during Mastra tool conversion
+
+This package includes a small workaround helper for that case:
+
+```ts
+import { Agent } from "@mastra/core/agent";
+import { tool } from "ai";
+import { z } from "zod";
+
+import { createOpenAICodexProvider, withMastraCompat } from "pi-oauth-ai-sdk";
+
+const provider = createOpenAICodexProvider({
+  authFile: "./.auth/pi-oauth.json",
+});
+
+const model = provider.languageModelV3("gpt-5.4");
+
+const weather = tool({
+  description: "Return a canned weather string for a city.",
+  inputSchema: z.object({
+    city: z.string(),
+  }),
+  execute: async ({ city }) => {
+    return { forecast: `clear-skies-for-${city.toLowerCase()}` };
+  },
+});
+
+const agent = withMastraCompat(new Agent({
+  id: "codex-master",
+  name: "Codex Master",
+  instructions: "You are a concise assistant.",
+  model,
+}));
+
+const toolResult = await agent.generate(
+  "Use the weather tool for Calgary, then reply with exactly the forecast string and nothing else.",
+  {
+    clientTools: { weather },
+    maxSteps: 3,
+  },
+);
+
+console.log(toolResult.text);
+
+const structured = await agent.generate(
+  "Return an object with status set to ok and code set to 7.",
+  {
+    output: z.object({
+      status: z.string(),
+      code: z.number(),
+    }),
+  },
+);
+
+console.log(structured.object);
+```
+
+`withMastraCompat(...)` does two things:
+
+- maps `output` to Mastra's `structuredOutput` option
+- temporarily promotes per-call `clientTools` into agent tools for that call, then restores the original tool set
+
 ## CLI
 
 ```bash
