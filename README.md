@@ -11,6 +11,9 @@ It is built for one job: reuse the OAuth flows and token refresh behavior from [
 - Refreshes expired tokens automatically
 - Exposes AI SDK `LanguageModelV2` and `LanguageModelV3` adapters
 - Includes a CLI for `login`, `logout`, `status`, and provider discovery
+- Supports OpenAI Codex device auth
+- Can import existing OpenAI Codex credentials from `~/.codex/auth.json`
+- Includes a minimal interactive terminal UI
 
 ## Supported Providers
 
@@ -32,6 +35,18 @@ First, authenticate a provider and write credentials to an auth file:
 
 ```bash
 npx pi-oauth-ai-sdk login --provider anthropic --auth-file ./.auth/pi-oauth.json
+```
+
+For OpenAI Codex, you can also use device auth:
+
+```bash
+npx pi-oauth-ai-sdk login --provider openai-codex --auth-file ./.auth/pi-oauth.json --device-auth
+```
+
+Or import an existing official Codex login:
+
+```bash
+npx pi-oauth-ai-sdk import-codex-auth --auth-file ./.auth/pi-oauth.json
 ```
 
 Then use that auth file from your application:
@@ -81,11 +96,30 @@ Each provider instance exposes:
 ```bash
 pi-oauth-ai-sdk providers
 pi-oauth-ai-sdk login --provider anthropic --auth-file ./.auth/pi-oauth.json
+pi-oauth-ai-sdk login --provider openai-codex --auth-file ./.auth/pi-oauth.json --device-auth
+pi-oauth-ai-sdk import-codex-auth --auth-file ./.auth/pi-oauth.json
 pi-oauth-ai-sdk status --provider anthropic --auth-file ./.auth/pi-oauth.json
 pi-oauth-ai-sdk logout --provider anthropic --auth-file ./.auth/pi-oauth.json
+pi-oauth-ai-sdk ui --auth-file ./.auth/pi-oauth.json
 ```
 
 `providers` prints the provider ids supported by the installed version of `@mariozechner/pi-ai`.
+
+### OpenAI Codex options
+
+- Browser login: `login --provider openai-codex --auth-file <path>`
+- Device auth: `login --provider openai-codex --auth-file <path> --device-auth`
+- Import from official Codex auth: `import-codex-auth --auth-file <path>`
+
+`import-codex-auth` auto-detects `CODEX_HOME/auth.json` or `~/.codex/auth.json` unless you provide `--source` or `--codex-home`.
+
+### Interactive UI
+
+The `ui` command opens a minimal terminal menu for login, Codex auth import, status checks, logout, and provider listing:
+
+```bash
+pi-oauth-ai-sdk ui --auth-file ./.auth/pi-oauth.json
+```
 
 ## Auth Storage
 

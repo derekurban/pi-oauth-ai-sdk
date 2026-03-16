@@ -13,6 +13,8 @@ const oauthMocks = vi.hoisted(() => ({
   getOAuthProvider: vi.fn(),
   getOAuthProviders: vi.fn(),
   getOAuthApiKey: vi.fn(),
+  importOpenAICodexCredentialsFromCodexAuth: vi.fn(),
+  loginOpenAICodexWithDeviceAuth: vi.fn(),
   loginOpenAICodexWithOfficialFlow: vi.fn(),
 }));
 
@@ -23,6 +25,8 @@ vi.mock("@mariozechner/pi-ai/oauth", () => ({
 }));
 
 vi.mock("./openai-codex-login.js", () => ({
+  importOpenAICodexCredentialsFromCodexAuth: oauthMocks.importOpenAICodexCredentialsFromCodexAuth,
+  loginOpenAICodexWithDeviceAuth: oauthMocks.loginOpenAICodexWithDeviceAuth,
   loginOpenAICodexWithOfficialFlow: oauthMocks.loginOpenAICodexWithOfficialFlow,
 }));
 
@@ -42,6 +46,8 @@ describe("PiOAuthAuthStore", () => {
     oauthMocks.getOAuthProvider.mockReset();
     oauthMocks.getOAuthProviders.mockReset();
     oauthMocks.getOAuthApiKey.mockReset();
+    oauthMocks.importOpenAICodexCredentialsFromCodexAuth.mockReset();
+    oauthMocks.loginOpenAICodexWithDeviceAuth.mockReset();
     oauthMocks.loginOpenAICodexWithOfficialFlow.mockReset();
 
     oauthMocks.getOAuthProvider.mockReturnValue(oauthMocks.provider);
@@ -155,5 +161,46 @@ describe("PiOAuthAuthStore", () => {
     expect(oauthMocks.loginOpenAICodexWithOfficialFlow).toHaveBeenCalledTimes(1);
     expect(oauthMocks.provider.login).not.toHaveBeenCalled();
     expect(record.accountId).toBe("acct_123");
+  });
+
+  it("uses device auth for OpenAI Codex when requested", async () => {
+    oauthMocks.loginOpenAICodexWithDeviceAuth.mockResolvedValue({
+      access: "codex-device-access",
+      refresh: "codex-device-refresh",
+      expires: Date.now() + 60_000,
+      accountId: "acct_device",
+    });
+
+    const store = new PiOAuthAuthStore(authFile);
+    const record = await store.login("openai-codex", {
+      onAuth: vi.fn(),
+      onPrompt: vi.fn(),
+    }, { deviceAuth: true });
+
+    expect(oauthMocks.loginOpenAICodexWithDeviceAuth).toHaveBeenCalledTimes(1);
+    expect(oauthMocks.loginOpenAICodexWithOfficialFlow).not.toHaveBeenCalled();
+    expect(record.accountId).toBe("acct_device");
+  });
+
+  it("imports OpenAI Codex credentials from auth.json", async () => {
+    oauthMocks.importOpenAICodexCredentialsFromCodexAuth.mockReturnValue({
+      access: "imported-access",
+      refresh: "imported-refresh",
+      expires: Date.now() + 60_000,
+      accountId: "acct_imported",
+    });
+
+    const store = new PiOAuthAuthStore(authFile);
+    const record = await store.importOpenAICodexAuth("D:/tmp/.codex/auth.json");
+
+    expect(oauthMocks.importOpenAICodexCredentialsFromCodexAuth).toHaveBeenCalledWith("D:/tmp/.codex/auth.json");
+    expect(record.accountId).toBe("acct_imported");
+
+    const file = JSON.parse(readFileSync(authFile, "utf8"));
+    expect(file["openai-codex"]).toMatchObject({
+      type: "oauth",
+      access: "imported-access",
+      refresh: "imported-refresh",
+    });
   });
 });

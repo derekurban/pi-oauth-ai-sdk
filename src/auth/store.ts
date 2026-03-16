@@ -11,7 +11,11 @@ import {
   type OAuthLoginCallbacks,
 } from "@mariozechner/pi-ai/oauth";
 
-import { loginOpenAICodexWithOfficialFlow } from "./openai-codex-login.js";
+import {
+  importOpenAICodexCredentialsFromCodexAuth,
+  loginOpenAICodexWithDeviceAuth,
+  loginOpenAICodexWithOfficialFlow,
+} from "./openai-codex-login.js";
 import {
   type PiOAuthAuthFile,
   type PiOAuthCredentialRecord,
@@ -29,22 +33,32 @@ type LockedMutationResult<T> = {
 export class PiOAuthAuthStore {
   constructor(readonly authFile: PiOAuthAuthFile) {}
 
-  async login(providerId: PiOAuthProviderId, callbacks: OAuthLoginCallbacks): Promise<PiOAuthCredentialRecord> {
+  async login(
+    providerId: PiOAuthProviderId,
+    callbacks: OAuthLoginCallbacks,
+    options?: { deviceAuth?: boolean },
+  ): Promise<PiOAuthCredentialRecord> {
     const provider = getOAuthProvider(providerId);
     if (!provider) {
       throw new Error(`Unknown OAuth provider: ${providerId}`);
     }
 
     const credentials = providerId === "openai-codex"
-      ? await loginOpenAICodexWithOfficialFlow(callbacks)
+      ? options?.deviceAuth
+        ? await loginOpenAICodexWithDeviceAuth(callbacks)
+        : await loginOpenAICodexWithOfficialFlow(callbacks)
       : await provider.login(callbacks);
     const record: PiOAuthCredentialRecord = { type: "oauth", ...credentials };
 
-    await this.withLock(async (data) => ({
-      result: record,
-      next: { ...data, [providerId]: record },
-    }));
+    await this.writeRecord(providerId, record);
 
+    return record;
+  }
+
+  async importOpenAICodexAuth(sourceAuthFile: string): Promise<PiOAuthCredentialRecord> {
+    const credentials = importOpenAICodexCredentialsFromCodexAuth(sourceAuthFile);
+    const record: PiOAuthCredentialRecord = { type: "oauth", ...credentials };
+    await this.writeRecord("openai-codex", record);
     return record;
   }
 
@@ -127,6 +141,13 @@ export class PiOAuthAuthStore {
 
   getProviders() {
     return getOAuthProviders();
+  }
+
+  private async writeRecord(providerId: PiOAuthProviderId, record: PiOAuthCredentialRecord): Promise<void> {
+    await this.withLock(async (data) => ({
+      result: undefined,
+      next: { ...data, [providerId]: record },
+    }));
   }
 
   private async read(): Promise<PiOAuthAuthData> {

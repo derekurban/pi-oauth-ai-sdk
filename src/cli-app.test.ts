@@ -5,11 +5,22 @@ const cliMocks = vi.hoisted(() => ({
   getStatus: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  importOpenAICodexAuth: vi.fn(),
+  runInteractiveUi: vi.fn(),
+  resolveDefaultCodexAuthFile: vi.fn(),
   authStoreCtor: vi.fn(),
 }));
 
 vi.mock("@mariozechner/pi-ai/oauth", () => ({
   getOAuthProviders: cliMocks.getOAuthProviders,
+}));
+
+vi.mock("./auth/openai-codex-login.js", () => ({
+  resolveDefaultCodexAuthFile: cliMocks.resolveDefaultCodexAuthFile,
+}));
+
+vi.mock("./cli-ui.js", () => ({
+  runInteractiveUi: cliMocks.runInteractiveUi,
 }));
 
 vi.mock("./auth/store.js", () => ({
@@ -24,6 +35,7 @@ vi.mock("./auth/store.js", () => ({
     getStatus = cliMocks.getStatus;
     login = cliMocks.login;
     logout = cliMocks.logout;
+    importOpenAICodexAuth = cliMocks.importOpenAICodexAuth;
   },
 }));
 
@@ -35,6 +47,9 @@ describe("runCli", () => {
     cliMocks.getStatus.mockReset();
     cliMocks.login.mockReset();
     cliMocks.logout.mockReset();
+    cliMocks.importOpenAICodexAuth.mockReset();
+    cliMocks.runInteractiveUi.mockReset();
+    cliMocks.resolveDefaultCodexAuthFile.mockReset();
     cliMocks.authStoreCtor.mockReset();
   });
 
@@ -64,5 +79,35 @@ describe("runCli", () => {
 
     expect(cliMocks.authStoreCtor).toHaveBeenCalledWith("D:/tmp/auth.json");
     expect(cliMocks.getStatus).toHaveBeenCalledWith("anthropic");
+  });
+
+  it("passes the device auth flag through to login", async () => {
+    cliMocks.login.mockResolvedValue({
+      expires: 1_700_000_000_000,
+    });
+
+    await runCli(["login", "--provider", "openai-codex", "--auth-file", "D:/tmp/auth.json", "--device-auth"]);
+
+    expect(cliMocks.login.mock.calls[0]?.[2]).toEqual({ deviceAuth: true });
+  });
+
+  it("imports Codex auth from the detected default path", async () => {
+    cliMocks.resolveDefaultCodexAuthFile.mockReturnValue("D:/Users/test/.codex/auth.json");
+    cliMocks.importOpenAICodexAuth.mockResolvedValue({
+      expires: 1_700_000_000_000,
+    });
+
+    await runCli(["import-codex-auth", "--auth-file", "D:/tmp/auth.json"]);
+
+    expect(cliMocks.importOpenAICodexAuth).toHaveBeenCalledWith("D:/Users/test/.codex/auth.json");
+  });
+
+  it("runs the interactive UI command", async () => {
+    await runCli(["ui", "--auth-file", "D:/tmp/auth.json", "--codex-home", "D:/Users/test/.codex"]);
+
+    expect(cliMocks.runInteractiveUi).toHaveBeenCalledWith({
+      authFile: "D:/tmp/auth.json",
+      codexHome: "D:/Users/test/.codex",
+    });
   });
 });
